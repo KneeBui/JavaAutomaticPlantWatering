@@ -1,0 +1,67 @@
+package MinorProject;
+
+import	org.firmata4j.Pin;
+import	org.firmata4j.ssd1306.SSD1306;
+import java.io.IOException;
+import	java.util.TimerTask;
+
+public class pumpingTask extends TimerTask {
+    private	final SSD1306 myOledDisplay;
+    private	final Pin voltage;
+    private final Pin waterPump;
+
+    // My fixed data for the state of the soil
+    static final double dryValue = 732;	          // Value at which the soil needs to be watered
+    static final double moistureThreshold = 637;  // The median value between the dryValue and the saturatedValue
+    static final double saturatedValue = 541;	  // Value at which the soil does not need more water
+
+    public pumpingTask (SSD1306 myOledDisplay, Pin voltage, Pin waterPump) {
+        this.myOledDisplay = myOledDisplay;
+        this.voltage = voltage;
+        this.waterPump = waterPump;
+    }
+
+    @Override
+    public void run() {
+
+        // State machine
+        var value = voltage.getValue();
+        if ((value < dryValue) && (value > moistureThreshold)) {
+            myOledDisplay.getCanvas().setTextsize(1);
+            myOledDisplay.getCanvas().drawString(0,0, "The soil is very dry! Please water!");
+            myOledDisplay.display();
+            try {
+                waterPump.setValue(1);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else if ((value < moistureThreshold) && (value > saturatedValue)) {
+            myOledDisplay.getCanvas().setTextsize(1);
+            myOledDisplay.getCanvas().drawString(0,0, "The soil is still dry! Don't stop the water!");
+            myOledDisplay.display();
+            try {
+                waterPump.setValue(1);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else if (value <= saturatedValue) {
+            myOledDisplay.getCanvas().setTextsize(1);
+            myOledDisplay.getCanvas().drawString(0,0, "The soil is wet now! Come back and water later!");
+            myOledDisplay.display();
+            try {
+                waterPump.setValue(0);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+            myOledDisplay.getCanvas().setTextsize(1);
+            myOledDisplay.getCanvas().drawString(0,0, "There is some error!");
+            myOledDisplay.display();
+            try {
+                waterPump.setValue(0);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
