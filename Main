@@ -1,0 +1,125 @@
+package MinorProject;
+
+import org.firmata4j.*;
+import org.firmata4j.firmata.FirmataDevice;
+import org.firmata4j.ssd1306.SSD1306;
+import java.awt.*;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Timer;
+import edu.princeton.cs.introcs.StdDraw;
+
+public class MinorProj {
+
+    public static void main(String[] args)
+            throws InterruptedException, IOException {
+
+        // Setting up my Arduino
+        var myDevice = new FirmataDevice("COM3");
+        myDevice.start();
+        myDevice.ensureInitializationIsDone();
+
+        try {
+            myDevice.start();
+            System.out.println("Board started!");
+            myDevice.ensureInitializationIsDone();
+        } catch (Exception ex) {
+            System.out.println("Couldn't connect to board!");
+        } finally {
+
+            // Initialize the button and the water pump
+            var button = myDevice.getPin(6);
+            button.setMode(Pin.Mode.INPUT);
+            var waterPump = myDevice.getPin(2);
+            waterPump.setMode(Pin.Mode.OUTPUT);
+
+            // Initialize my OLED Display
+            I2CDevice i2cObject = myDevice.getI2CDevice((byte) 0x3C);
+            SSD1306 myOledDisplay = new SSD1306(i2cObject, SSD1306.Size.SSD1306_128_64);
+            myOledDisplay.init();
+
+            // Taking the voltage value from the sensor
+            var voltage = myDevice.getPin(15);
+            voltage.setMode(Pin.Mode.ANALOG);
+
+            // Creating a new task for my "pumpingTask"
+            var task = new pumpingTask(myOledDisplay, voltage, waterPump);
+            Timer timer = new Timer();
+
+            // Set the timer every 1 second to check the soil's state constantly
+            timer.schedule(task, 0, 1000);
+
+            // Setting up HashMap (data pairs)
+            HashMap<Integer, Integer> myPairs = new HashMap<>();
+
+            // Setting the graph
+            // Axes (scale)
+            StdDraw.setXscale(-25, 120);
+            StdDraw.setYscale(-30, 1100);
+
+            // Pen parameters
+            StdDraw.setPenRadius(0.005);
+            StdDraw.setPenColor(StdDraw.BLACK);
+
+            // Drawing axes
+            StdDraw.line(0, 0, 100, 0);  // Horizontal line
+            StdDraw.line(0, 0, 0, 1023); // Vertical line
+
+            // Labelling
+            StdDraw.text(50, -70, "TIME [SEC]");
+            StdDraw.text(-17, 500, "ANALOG [QUANTA]",90);
+            StdDraw.text(50, 1100, "SOIL MOISTURE SENSOR QUANTA OVER TIME GRAPH");
+            StdDraw.text(20,-30,"20");
+            StdDraw.text(40,-30,"40");
+            StdDraw.text(60,-30,"60");
+            StdDraw.text(80,-30,"80");
+            StdDraw.text(100,-30,"100");
+            StdDraw.text(-5,1,"1");
+            StdDraw.text(-5,2,"2");
+            StdDraw.text(-5,3,"3");
+            StdDraw.text(-5,4,"4");
+            StdDraw.text(-5,5,"5");
+
+            // Add the Listener to the button to stop the program
+            button.addEventListener(new PinEventListener() {
+                @Override
+                public void onModeChange(IOEvent event) {}
+                @Override
+                public void onValueChange(IOEvent event) {
+                    if (button.getValue() == 1) {
+                        try {
+                            waterPump.setValue(0);
+                            myDevice.stop();
+                            System.out.println("Stop connection to board!");
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    } else {
+                        return;
+                    }
+                }
+            });
+
+            // Loading data pairs into the HashMap
+            var sample = 1;
+            while (button.getValue() != 1) {
+
+                // Pause`
+                Thread.sleep(1000);
+
+                if (sample <= 100) {
+                    System.out.println("Sample: " + sample + " with voltage " + voltage.getValue());
+                    sample++;
+                    myPairs.put(sample, (int)voltage.getValue());
+                } else {
+                    sample = 1; //reset
+                    System.out.println("Sample: " + sample + " with voltage " + voltage.getValue());
+                    myPairs.put(sample, (int)voltage.getValue());
+                }
+
+                // Plotting the graph
+                myPairs.forEach((xValue, yValue) -> StdDraw.text(xValue, yValue, "*"));
+            }
+        }
+    }
+}
